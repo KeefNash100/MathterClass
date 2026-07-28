@@ -169,13 +169,32 @@
       text-transform: uppercase;
       color: #8b949e;
     }
+    .audio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      background: #0a0c10;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-bright);
+    }
   </style>
 </head>
 <body>
 
   <header>
     <h1>HammerLoom Worldbuilder</h1>
-    <span style="font-size:0.8rem; color:#8b949e;">Narrative Interpreter v1.0</span>
+    <span style="font-size:0.8rem; color:#8b949e;">Narrative Interpreter v1.1</span>
   </header>
 
   <div class="app-layout">
@@ -187,7 +206,18 @@
 
       <button class="interpret-btn" onclick="interpretStory()">Synthesize World</button>
 
-      <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
+      <div class="audio-group">
+        <label>Instinctive Audio Engine</label>
+        <div class="audio-controls">
+          <button id="audioToggleBtn" onclick="toggleAudio()" style="text-align:center; width:100%;">Enable Audio</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+          <span style="font-size:0.75rem; color:#8b949e;">Vol:</span>
+          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.3" oninput="updateVolume(this.value)">
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:0.5rem;">
         <label>Quick Archetype Presets</label>
         <div class="archetypes">
           <button onclick="loadPreset('neon')">Cyber Alleys</button>
@@ -215,7 +245,7 @@
         </div>
         <div class="hud-stat">
           <span class="lbl">Kinetic Tempo</span>
-          <span class="val" id="hudTempo">High ($t \times 0.03$)</span>
+          <span class="val" id="hudTempo">High</span>
         </div>
         <div class="hud-stat">
           <span class="lbl">Geometry Type</span>
@@ -234,9 +264,8 @@
     let t = 0;
     let pointer = { x: 0, y: 0, active: false };
 
-    // World Parameter Engine State
     let worldState = {
-      mode: 'grid', // 'grid', 'cosmic', 'fluid', 'crystalline'
+      mode: 'grid',
       speed: 0.02,
       density: 16,
       colorA: '#00f2fe',
@@ -266,6 +295,146 @@
       }
     };
 
+    // --- INSTINCTIVE AUDIO ENGINE (Web Audio API) ---
+    let audioCtx = null;
+    let masterGain = null;
+    let audioEnabled = false;
+    let mainOsc = null;
+    let filterNode = null;
+    let noiseNode = null;
+
+    function initAudio() {
+      if (audioCtx) return;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = parseFloat(document.getElementById('volumeSlider').value);
+      masterGain.connect(audioCtx.destination);
+      setupAudioForMode();
+    }
+
+    function toggleAudio() {
+      if (!audioCtx) initAudio();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('audioToggleBtn');
+      
+      if (audioEnabled) {
+        btn.innerText = "Mute Audio";
+        btn.style.background = "var(--accent-bright)";
+        btn.style.color = "#000";
+        setupAudioForMode();
+      } else {
+        btn.innerText = "Enable Audio";
+        btn.style.background = "#1a1e2b";
+        btn.style.color = "var(--text)";
+        stopAudioNodes();
+      }
+    }
+
+    function updateVolume(val) {
+      if (masterGain) masterGain.gain.value = parseFloat(val);
+    }
+
+    function stopAudioNodes() {
+      if (mainOsc) { try { mainOsc.stop(); mainOsc.disconnect(); } catch(e){} mainOsc = null; }
+      if (filterNode) { try { filterNode.disconnect(); } catch(e){} filterNode = null; }
+      if (noiseNode) { try { noiseNode.stop(); noiseNode.disconnect(); } catch(e){} noiseNode = null; }
+    }
+
+    function setupAudioForMode() {
+      if (!audioEnabled || !audioCtx) return;
+      stopAudioNodes();
+
+      if (worldState.mode === 'grid') {
+        // Low Cyber Sub Drone
+        mainOsc = audioCtx.createOscillator();
+        mainOsc.type = 'sawtooth';
+        mainOsc.frequency.setValueAtTime(55, audioCtx.currentTime); // A1 note
+        
+        filterNode = audioCtx.createBiquadFilter();
+        filterNode.type = 'lowpass';
+        filterNode.frequency.setValueAtTime(300, audioCtx.currentTime);
+
+        mainOsc.connect(filterNode);
+        filterNode.connect(masterGain);
+        mainOsc.start();
+      } else if (worldState.mode === 'cosmic') {
+        // Deep Resonant Pad
+        mainOsc = audioCtx.createOscillator();
+        mainOsc.type = 'sine';
+        mainOsc.frequency.setValueAtTime(82.41, audioCtx.currentTime); // E2 note
+
+        filterNode = audioCtx.createBiquadFilter();
+        filterNode.type = 'bandpass';
+        filterNode.frequency.setValueAtTime(200, audioCtx.currentTime);
+
+        mainOsc.connect(filterNode);
+        filterNode.connect(masterGain);
+        mainOsc.start();
+      } else if (worldState.mode === 'fluid') {
+        // Ocean Current Noise Simulation
+        const bufferSize = audioCtx.sampleRate * 2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = buffer;
+        noiseNode.loop = true;
+
+        filterNode = audioCtx.createBiquadFilter();
+        filterNode.type = 'lowpass';
+        filterNode.frequency.setValueAtTime(400, audioCtx.currentTime);
+
+        noiseNode.connect(filterNode);
+        filterNode.connect(masterGain);
+        noiseNode.start();
+      } else {
+        // Crystalline Sine Tone
+        mainOsc = audioCtx.createOscillator();
+        mainOsc.type = 'sine';
+        mainOsc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4 note
+
+        filterNode = audioCtx.createBiquadFilter();
+        filterNode.type = 'highpass';
+        filterNode.frequency.setValueAtTime(800, audioCtx.currentTime);
+
+        mainOsc.connect(filterNode);
+        filterNode.connect(masterGain);
+        mainOsc.start();
+      }
+    }
+
+    function triggerInteractionTone() {
+      if (!audioEnabled || !audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = worldState.mode === 'crystalline' ? 'triangle' : 'sine';
+      
+      const freq = worldState.mode === 'crystalline' ? 880 : (worldState.mode === 'grid' ? 120 : 220);
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && audioCtx) {
+        audioCtx.suspend();
+      } else if (!document.hidden && audioCtx && audioEnabled) {
+        audioCtx.resume();
+      }
+    });
+
+    // --- CANVAS & SYSTEM LOGIC ---
     function resize() {
       const dpr = window.devicePixelRatio || 1;
       const rect = stage.getBoundingClientRect();
@@ -278,12 +447,10 @@
 
     window.addEventListener('resize', resize);
 
-    // Narrative Parser (Keyword/Semantic Matcher)
     function interpretStory() {
       const text = document.getElementById('storyInput').value.toLowerCase();
       if (!text.trim()) return;
 
-      // Extract Atmosphere
       if (text.includes('neon') || text.includes('tech') || text.includes('city') || text.includes('rain') || text.includes('cyber')) {
         worldState.mode = 'grid';
         worldState.colorA = '#00f2fe'; worldState.colorB = '#ff007f';
@@ -306,7 +473,6 @@
         worldState.envName = 'Crystal Chamber'; worldState.geoName = 'Vector Prisms';
       }
 
-      // Extract Pacing
       if (text.includes('fast') || text.includes('surge') || text.includes('storm') || text.includes('fight') || text.includes('crash')) {
         worldState.speed = 0.04; worldState.density = 24;
       } else if (text.includes('quiet') || text.includes('calm') || text.includes('drift') || text.includes('slow')) {
@@ -316,6 +482,7 @@
       }
 
       updateHUD();
+      setupAudioForMode();
     }
 
     function loadPreset(key) {
@@ -323,6 +490,7 @@
       document.getElementById('storyInput').value = p.story;
       worldState = { ...p.state };
       updateHUD();
+      setupAudioForMode();
     }
 
     function updateHUD() {
@@ -344,14 +512,18 @@
       link.click();
     }
 
-    // Pointer Events
-    stage.addEventListener('mousemove', (e) => {
+    // Pointer Events & Audio Triggers
+    stage.addEventListener('pointerdown', (e) => {
+      triggerInteractionTone();
+    });
+
+    stage.addEventListener('pointermove', (e) => {
       const rect = stage.getBoundingClientRect();
       pointer.x = e.clientX - rect.left;
       pointer.y = e.clientY - rect.top;
       pointer.active = true;
     });
-    stage.addEventListener('mouseleave', () => pointer.active = false);
+    stage.addEventListener('pointerleave', () => pointer.active = false);
 
     // Renderer Loop
     function render() {
@@ -363,16 +535,21 @@
 
       ctx.clearRect(0, 0, w, h);
 
-      // Background Gradient
       let bg = ctx.createRadialGradient(w/2, h/2, 10, w/2, h/2, Math.max(w, h));
       bg.addColorStop(0, worldState.bgB);
       bg.addColorStop(1, worldState.bgA);
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, w, h);
 
-      // Render Procedural Geometry based on World Mode
       ctx.lineWidth = 1.5;
       const count = worldState.density;
+
+      // Dynamically modulate audio filter frequency slightly based on animation cycle t
+      if (filterNode && audioEnabled) {
+        let mod = Math.sin(t * 2) * 50;
+        if (worldState.mode === 'grid') filterNode.frequency.setValueAtTime(300 + mod, audioCtx.currentTime);
+        if (worldState.mode === 'cosmic') filterNode.frequency.setValueAtTime(200 + mod, audioCtx.currentTime);
+      }
 
       for (let i = 0; i < count; i++) {
         ctx.beginPath();
@@ -400,7 +577,7 @@
           let radius = 20 + i * (Math.min(w, h) / (count * 2));
           let angle = t + (i * 0.2);
           ctx.arc(cx + Math.cos(angle) * 30, cy + Math.sin(angle) * 30, radius, 0, Math.PI * 2);
-        } else { // Crystalline
+        } else {
           let cx = w / 2, cy = h / 2;
           let r = 40 + i * 18;
           let points = 6;
@@ -419,7 +596,6 @@
       requestAnimationFrame(render);
     }
 
-    // Init
     resize();
     loadPreset('neon');
     render();
