@@ -1,1 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HammerLoom Motion Graphics Generator</title>
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --panel: #1a1d24;
+      --accent: #00f2fe;
+      --text: #f0f2f5;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    header {
+      width: 100%;
+      padding: 1rem 2rem;
+      background: var(--panel);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .app-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      padding: 2rem;
+      justify-content: center;
+      max-width: 1200px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .preview-stage {
+      flex: 1;
+      min-width: 320px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #050608;
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+      position: relative;
+    }
+    .canvas-wrapper {
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .overlay-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 75%;
+      padding: 1.5rem;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      text-align: center;
+      pointer-events: auto;
+      cursor: pointer;
+      user-select: none;
+    }
+    .overlay-card h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.2rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+    .controls-panel {
+      width: 320px;
+      background: var(--panel);
+      padding: 1.5rem;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #a0a5b0;
+    }
+    select, input[type="text"], button {
+      background: #252932;
+      border: 1px solid #3a3f4d;
+      color: var(--text);
+      padding: 0.6rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    select:focus, input:focus {
+      border-color: var(--accent);
+    }
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #323745;
+    }
+    button.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
 
+  <header>
+    <h1>HammerLoom Motion Generator</h1>
+  </header>
+
+  <div class="app-container">
+    <div class="preview-stage">
+      <div class="canvas-wrapper" id="wrapper">
+        <canvas id="motionCanvas" aria-label="Interactive motion graphics canvas"></canvas>
+        <div class="overlay-card" id="cardOverlay" onclick="triggerCardPulse()">
+          <h2 id="cardHook">3 Secrets to Scale</h2>
+          <p id="cardSub">Tap to interact with the motion background</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-panel">
+      <div class="control-group">
+        <label>Aspect Ratio</label>
+        <div class="btn-group">
+          <button onclick="setRatio('9:16')" class="active" id="btn-916">9:16 (Story)</button>
+          <button onclick="setRatio('16:9')" id="btn-169">16:9 (Video)</button>
+          <button onclick="setRatio('1:1')" id="btn-11">1:1 (Post)</button>
+          <button onclick="setRatio('4:5')" id="btn-45">4:5 (Feed)</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Vibe Preset</label>
+        <select id="vibePreset" onchange="updateTheme()">
+          <option value="cyber">Cyber Tech (Neon Grid)</option>
+          <option value="organic">Organic Flow (Pastel Waves)</option>
+          <option value="energy">High Energy (Pulse Vectors)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Overlay Hook Text</label>
+        <input type="text" id="textInput" value="3 Secrets to Scale" oninput="updateText()">
+      </div>
+
+      <div class="control-group">
+        <label>Overlay Subtitle</label>
+        <input type="text" id="subInput" value="Tap to interact with the motion background" oninput="updateText()">
+      </div>
+
+      <div class="btn-group">
+        <button id="playPauseBtn" onclick="togglePlayPause()">Pause</button>
+        <button onclick="snapFrame()">Snap PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('motionCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('wrapper');
+
+    let currentRatio = '9:16';
+    let t = 0;
+    let pointer = { x: 0, y: 0, active: false };
+    let isPlaying = true;
+    let animationFrameId = null;
+
+    const themes = {
+      cyber: { bg1: '#050b14', bg2: '#020307', color1: '#00f2fe', color2: '#4facfe', speed: 0.02, density: 18 },
+      organic: { bg1: '#1b1224', bg2: '#0c0714', color1: '#ff9a9e', color2: '#fecfef', speed: 0.01, density: 10 },
+      energy: { bg1: '#140005', bg2: '#050002', color1: '#ff0844', color2: '#ffb199', speed: 0.04, density: 25 }
+    };
+
+    let activeTheme = themes.cyber;
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      isPlaying = false;
+      document.getElementById('playPauseBtn').innerText = 'Play';
+    }
+
+    function setRatio(ratio) {
+      currentRatio = ratio;
+      document.querySelectorAll('.btn-group button').forEach(b => {
+        if(b.id.startsWith('btn-')) b.classList.remove('active');
+      });
+      const activeBtn = document.getElementById('btn-' + ratio.replace(':', ''));
+      if(activeBtn) activeBtn.classList.add('active');
+      resizeCanvas();
+    }
+
+    function resizeCanvas() {
+      let cssWidth = 340, cssHeight = 604;
+      if (currentRatio === '16:9') { cssWidth = 480; cssHeight = 270; }
+      if (currentRatio === '1:1') { cssWidth = 360; cssHeight = 360; }
+      if (currentRatio === '4:5') { cssWidth = 320; cssHeight = 400; }
+
+      const dpr = window.devicePixelRatio || 1;
+      wrapper.style.width = cssWidth + 'px';
+      wrapper.style.height = cssHeight + 'px';
+
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+      ctx.scale(dpr, dpr);
+      canvas.dataset.cssWidth = cssWidth;
+      canvas.dataset.cssHeight = cssHeight;
+    }
+
+    function updateTheme() {
+      const presetKey = document.getElementById('vibePreset').value;
+      activeTheme = themes[presetKey];
+    }
+
+    function updateText() {
+      document.getElementById('cardHook').innerText = document.getElementById('textInput').value;
+      document.getElementById('cardSub').innerText = document.getElementById('subInput').value;
+    }
+
+    function triggerCardPulse() { t += 0.2; }
+
+    function togglePlayPause() {
+      isPlaying = !isPlaying;
+      document.getElementById('playPauseBtn').innerText = isPlaying ? 'Pause' : 'Play';
+      if (isPlaying) render();
+    }
+
+    function updatePointer(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = clientX - rect.left;
+      pointer.y = clientY - rect.top;
+      pointer.active = true;
+    }
+
+    canvas.addEventListener('mousemove', (e) => updatePointer(e.clientX, e.clientY));
+    canvas.addEventListener('mouseleave', () => { pointer.active = false; });
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 0) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 0) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    canvas.addEventListener('touchend', () => { pointer.active = false; });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && isPlaying) {
+        cancelAnimationFrame(animationFrameId);
+      } else if (!document.hidden && isPlaying) {
+        render();
+      }
+    });
+
+    function snapFrame() {
+      const link = document.createElement('a');
+      link.download = `hammerloom-bg-${currentRatio.replace(':', 'x')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    function render() {
+      if (!isPlaying) return;
+      t += activeTheme.speed;
+
+      const width = parseFloat(canvas.dataset.cssWidth || canvas.width);
+      const height = parseFloat(canvas.dataset.cssHeight || canvas.height);
+
+      ctx.clearRect(0, 0, width, height);
+
+      let grad = ctx.createLinearGradient(0, 0, width, height);
+      grad.addColorStop(0, activeTheme.bg1);
+      grad.addColorStop(1, activeTheme.bg2);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.lineWidth = 1.5;
+      const count = activeTheme.density;
+      for (let i = 0; i < count; i++) {
+        ctx.beginPath();
+        let progress = i / count;
+        let strokeGrad = ctx.createLinearGradient(0, 0, width, 0);
+        strokeGrad.addColorStop(0, activeTheme.color1);
+        strokeGrad.addColorStop(1, activeTheme.color2);
+        ctx.strokeStyle = strokeGrad;
+
+        for (let x = 0; x <= width; x += 8) {
+          let y = height / 2 +
+            Math.sin(x * 0.01 + t + progress * Math.PI * 2) * 40 +
+            Math.cos(x * 0.02 - t) * 20;
+
+          if (pointer.active) {
+            let dx = x - pointer.x;
+            let dy = y - pointer.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) y += (100 - dist) * 0.3;
+          }
+
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.globalAlpha = 0.3 + (i / count) * 0.5;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1.0;
+
+      animationFrameId = requestAnimationFrame(render);
+    }
+
+    setRatio('9:16');
+    render();
+  </script>
+</body>
+</html>
